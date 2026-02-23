@@ -1,7 +1,8 @@
 # Controller
 Ecossistema de produtividade pessoal
 
-Aplicativo desenvolvido para centralizar o controle e organização do usuário. O portal conta com três modulos:
+Aplicativo desenvolvido para centralizar o controle e organização do usuário final.
+O portal conta com três modulos:
 
 **•**	**TaskMaster**: Gestão inteligente de tarefas com categorização por trabalho, pessoal e urgência.
 
