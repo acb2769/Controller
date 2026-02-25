@@ -1,178 +1,133 @@
 import { NavLink } from "react-router-dom";
-
-import { useState } from 'react'
-import './index.css'
-import { LuCheck, LuTrash } from 'react-icons/lu'
-
-interface IErro {
-  active: boolean
-  description: string
-}
-
-interface ITarefa {
-  id: string
-  descricao: string
-  criadoEm: string
-  ativo: boolean
-  concluido: boolean
-}
-
-interface IAjustarTarefa {
-  id: string,
-  tipo: "ATUALIZAR" | "EXCLUIR"
-}
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useEffect, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import * as z from 'zod'
 
 export function TaskMaster() {
-  const [valorDoInput, setValorDoInput] = useState<string>("")
-  const [tarefas, setTarefas] = useState<ITarefa[]>([])
-  const [erro, setErro] = useState<IErro>({
-    active: false,
-    description: ""
+  // Estado para armazenar a lista de tarefas
+  const [tarefas, setTarefas] = useState<TypeForm[]>([]);
+  const [mostrarLista, setMostrarLista] = useState(false);
+
+  useEffect(() => {
+    const tarefasArmazenadas = localStorage.getItem('tarefas')
+    if (tarefasArmazenadas) {
+      setTarefas(JSON.parse(tarefasArmazenadas))
+    }
+  }, [])
+
+  // Regras do Formulário para Tarefas
+  const regrasFormulario = z.object({
+    numero: z.string().min(1, 'Campo obrigatório.'),
+    descricao: z.string().min(5, 'Mínimo 5 caracteres.').max(15, 'Máximo 15 caracteres.'),
+    categoria: z.enum(["Trabalho", "Pessoal", "Urgente"], {
+    error: "Selecione uma categoria válida"
+    }),
   })
-  const [mostrarModal, setMostrarModal] = useState<boolean>()
-  const [realizarAcao, setRealizarAcao] = useState<boolean>(false)
-  const [idTarefaSelecionada, setIdTarefaSelecionada] = useState<string>("")
+    
+  type TypeForm = z.infer<typeof regrasFormulario>
 
-  function adicionarTarefa(): void {
-    if (valorDoInput.trim() === "") {
-      setErro({
-        active: true,
-        description: "Campo obrigatório."
-      })
-      return
+  const formulario = useForm<TypeForm>({
+    resolver: zodResolver(regrasFormulario)
+  })
+
+  // FUNÇÃO SALVAR (Verifica duplicados pelo número da tarefa)
+  function submeterFormulario(camposDoFormulario: TypeForm) {
+    const jaExiste = tarefas.some(item => item.numero === camposDoFormulario.numero)
+
+    if (jaExiste) {
+      const confirmar = confirm("Este número de tarefa já existe. Deseja salvar mesmo assim?")
+      if (!confirmar) {
+        return;
+      }
     }
 
-    if (valorDoInput.trim().length < 5 || valorDoInput.trim().length > 15) {
-        setErro({
-            active: true,
-            description: "O texto deve ter entre 5 e 15 caracteres."
-        })
-        return
-    }    
-    {/*if (valorDoInput.trim().length > 15) {
-      setErro({
-        active: true,
-        description: "Máximo 15 caracteres."
-      })
-      return
-    }*/}
-
-    const tarefasFiltradas = tarefas.filter(
-      tarefa => tarefa.descricao.trim().toLowerCase() === valorDoInput.trim().toLowerCase()
-    )
-
-    if (tarefasFiltradas.length > 0) {
-      setErro({
-        active: true,
-        description: "Tarefa já cadastrada."
-      })
-      return
-    }
-
-    const montarObjetoTarefa: ITarefa = {
-      id: Math.random().toString(36).substring(2, 9),
-      descricao: valorDoInput,
-      criadoEm: new Date().toISOString(),
-      concluido: false,
-      ativo: true
-    }
-
-    setTarefas(oldState => [...oldState, montarObjetoTarefa])
-    setValorDoInput("")
+    const novaLista = [...tarefas, camposDoFormulario]
+    setTarefas(novaLista)
+    localStorage.setItem('tarefas', JSON.stringify(novaLista))
+    alert("Tarefa salva com sucesso!")
   }
 
-  function ajustarTarefa({ id, tipo }: IAjustarTarefa): void {
-    if (tipo === "ATUALIZAR") {
-      const novoArrayTarefas = tarefas.map(tarefa => {
-        if (tarefa.id === id) {
-          return { ...tarefa, concluido: true }
-        }
-
-        return { ...tarefa }
-      }
-      )
-      return setTarefas(novoArrayTarefas)
-    }
-
-    if (tipo === "EXCLUIR") {
-      const novoArrayTarefas = tarefas.filter(tarefa => {
-        if (tarefa.id !== id) {
-          return { ...tarefa }
-        }
-      }
-      )
-      return setTarefas(novoArrayTarefas)
-    }
-
+  // FUNÇÃO NOVO (Limpa a tela)
+  function botaoNovo() {
+    formulario.reset()
+    alert("Tela limpa para nova tarefa!")
   }
 
-  function abrirModal(idTarefa: string): void {
-    setIdTarefaSelecionada(idTarefa)
-    setMostrarModal(!mostrarModal)
+  // FUNÇÃO DELETAR (Pede a posição na lista)
+  function deletarPorNumero() {
+    const numeroStr = prompt("Digite o item da lista que deseja remover (1, 2, 3...):")
+    const index = parseInt(numeroStr || "0") - 1
+
+    if (index >= 0 && index < tarefas.length) {
+      const novaLista = tarefas.filter((_, i) => i !== index)
+      setTarefas(novaLista)
+      localStorage.setItem('tarefas', JSON.stringify(novaLista))
+    } else {
+      alert("Item não encontrado.")
+    }
   }
 
   return (
     <>
-      <div className="card">
-        <div className='input-wrapper'>
-          <input type="text" id='input-tarefa' value={valorDoInput} onChange={(e) => setValorDoInput(e.target.value)} />
-          <p className='erro'>{erro.active && erro.description}</p>
-        </div>
-        <button onClick={adicionarTarefa}>Adicionar Tarefa</button>
-      </div>
-      <ul>
-        {
-          tarefas.map((tarefa) => (
-            <div className='item-list'>
-              <li key={tarefa.id} className={`${tarefa.concluido === true ? 'concluido' : ''}`}>{tarefa.descricao}</li>
-              <LuTrash style={{ cursor: 'pointer' }} onClick={() => {
-                setIdTarefaSelecionada(tarefa.id)
-                setMostrarModal(!mostrarModal)
-              }} />
-              {/* <LuTrash style={{ cursor: 'pointer' }} onClick={() => ajustarTarefa({ id: tarefa.id, tipo: "EXCLUIR" })} /> */}
-              <LuCheck style={{ cursor: 'pointer' }} onClick={() => ajustarTarefa({ id: tarefa.id, tipo: "ATUALIZAR" })} />
-              {/* <LuCheck style={{ cursor: 'pointer' }} onClick={() => ajustarTarefa({ id: tarefa.id, tipo: "ATUALIZAR" })} /> */}
-            </div>
-          ))
-        }
-      </ul>
-
-      {mostrarModal === true && (
-        <div className='modal-wrapper'>
-          <div className="modal">
-            <h1>MEU MODAL</h1>
-            <h3>Deseja seguir com a sua solicitação ?</h3>
-            <div className='modal-buttons'>
-              <button onClick={() => {
-                setRealizarAcao(false)
-                setMostrarModal(false)
-                console.log(realizarAcao)
-              }}>NÃO</button>
-              <button onClick={() => {
-                ajustarTarefa({ id: idTarefaSelecionada, tipo: "EXCLUIR" })
-                setMostrarModal(!mostrarModal)
-              }}>SIM</button>
-            </div>
+      <div className='flex flex-col justify-center mt-4 max-w-md mx-auto p-10 bg-white shadow-lg rounded-xl mt-10'>
+        <h1 className="font-serif text-left mb-2 text-xl tracking-tight">taskMaster<span className="text-amber-500">.</span></h1>
+        <div className="border-b border-gray-200 my-6"></div>
+        
+        <form onSubmit={formulario.handleSubmit(submeterFormulario)} className="flex flex-col gap-4">
+          
+          {/* CAMPO NÚMERO */}
+          <div className="flex flex-col relative">
+            <label className="text-left">Identificador pessoal de tarefa:</label>
+            <input {...formulario.register('numero')} type="number" className="border border-solid border-gray-400 mb-2 text-zinc-900 rounded-sm px-2 py-1" />
+            {formulario.formState.errors.numero && (
+              <span className="text-red-500 text-xs absolute -bottom-2 left-0">{formulario.formState.errors.numero.message}</span>
+            )}
           </div>
-        </div>
-      )}
+
+          {/* CAMPO DESCRIÇÃO (TAREFA) */}
+          <div className="flex flex-col relative">
+            <label className="text-left">Tarefa:</label>
+            <input {...formulario.register("descricao")} type="text" className="border border-solid border-gray-400 mb-2 text-zinc-900 rounded-sm px-2 py-1" />
+            {formulario.formState.errors.descricao && (
+              <span className="text-red-500 text-xs absolute -bottom-2 left-0">{formulario.formState.errors.descricao.message}</span>
+            )}
+          </div>
+
+          {/* CAMPO CATEGORIA (SELECT) */}
+          <div className="flex flex-col relative">
+            <label className="text-left">Categoria:</label>
+            <select {...formulario.register("categoria")} className="border border-solid border-gray-400 mb-2 text-zinc-900 rounded-sm px-2 py-1 bg-white">
+              <option value="">Selecione...</option>
+              <option value="Trabalho">Trabalho</option>
+              <option value="Pessoal">Pessoal</option>
+              <option value="Urgente">Urgente</option>
+            </select>
+            {formulario.formState.errors.categoria && (
+              <span className="text-red-500 text-xs absolute -bottom-2 left-0">{formulario.formState.errors.categoria.message}</span>
+            )}
+          </div>
+
+          {/* BOTÕES */}
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <button type="button" onClick={botaoNovo} className="p-2 border border-zinc-600 rounded-sm hover:bg-gray-100">Novo</button>
+            <button type="button" onClick={() => setMostrarLista(!mostrarLista)} className="p-2 border border-blue-600 text-blue-600 rounded-sm">
+              {mostrarLista ? 'Ocultar' : 'Listar'}
+            </button>
+            <button type="button" onClick={deletarPorNumero} className="p-2 border border-red-600 text-red-600 rounded-sm">Deletar</button>
+            <button type="submit" className="p-2 border border-zinc-600 rounded-sm bg-zinc-900 text-zinc-50">Salvar</button>
+          </div>
+        </form>
+      </div>
+
+      {/* LISTAGEM */}
+      <div className="mt-6 max-w-md mx-auto">
+        {mostrarLista && tarefas.map((t, index) => (
+          <p className="text-center bg-gray-50 p-2 text-sm" key={index}>
+            <strong>{index + 1}.</strong> {t.numero} - {t.descricao} [{t.categoria}]
+          </p>
+        ))}
+      </div>
     </>
   )
 }
-
-
-
-
-
-
-
-{/*}
-export function TaskMaster() {
-
-    return (
-        <>
-            <h1>Exemplo de página de taskMaster - controlador de tarefas</h1>
-            <NavLink className='text-xs text-cyan-800 underline' to={'/'}>Link para página inicial</NavLink>
-        </>
-    )
-}*/}
